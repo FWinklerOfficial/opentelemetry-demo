@@ -161,8 +161,8 @@ kyma-registry-login:
 	  -o jsonpath='{.spec.hosts[0]}' 2>/dev/null) && \
 	CREDS=$$(KUBECONFIG=$(KUBECONFIG) kubectl get secret dockerregistry-config-external -n docker-registry \
 	  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d) && \
-	REGISTRY_USER=$$(echo "$$CREDS" | python3 -c "import sys,json; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; print(auths[k]['username'])") && \
-	REGISTRY_PASS=$$(echo "$$CREDS" | python3 -c "import sys,json; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; print(auths[k]['password'])") && \
+	REGISTRY_USER=$$(echo "$$CREDS" | python3 -c "import sys,json,base64; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; a=auths[k]; print(a['username'] if 'username' in a else base64.b64decode(a['auth']).decode().split(':',1)[0])") && \
+	REGISTRY_PASS=$$(echo "$$CREDS" | python3 -c "import sys,json,base64; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; a=auths[k]; print(a['password'] if 'password' in a else base64.b64decode(a['auth']).decode().split(':',1)[1])") && \
 	echo "$$REGISTRY_PASS" | $(DOCKER_CMD) login "$$REGISTRY_HOST" -u "$$REGISTRY_USER" --password-stdin && \
 	echo "Logged in to $$REGISTRY_HOST"
 
