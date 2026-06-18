@@ -369,12 +369,20 @@ helm-repo-add:
 
 HELM_VALUES ?= helm/values.yaml
 
+# Read IMAGE_NAME / DEMO_VERSION from .env.override if present, else .env
+HELM_IMAGE_REPO ?= $(shell grep -s '^IMAGE_NAME=' .env.override .env | head -1 | cut -d= -f2-)
+HELM_IMAGE_TAG  ?= $(shell grep -s '^DEMO_VERSION=' .env.override .env | head -1 | cut -d= -f2-)
+HELM_PULL_SECRET ?= dockerregistry-config-external
+
 .PHONY: helm-deploy
 helm-deploy: helm-repo-add
 	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) upgrade --install $(HELM_RELEASE) \
 		open-telemetry/opentelemetry-demo \
 		--namespace $(HELM_NAMESPACE) --create-namespace \
-		-f $(HELM_VALUES)
+		-f $(HELM_VALUES) \
+		$(if $(HELM_IMAGE_REPO),--set default.image.repository=$(HELM_IMAGE_REPO)) \
+		$(if $(HELM_IMAGE_TAG),--set default.image.tag=$(HELM_IMAGE_TAG)) \
+		--set "default.image.pullSecrets[0].name=$(HELM_PULL_SECRET)"
 
 .PHONY: helm-undeploy
 helm-undeploy:
