@@ -12,6 +12,12 @@ MISSPELL = $(TOOLS_DIR)/$(MISSPELL_BINARY)
 ADDLICENSE_BINARY=bin/addlicense
 ADDLICENSE = $(TOOLS_DIR)/$(ADDLICENSE_BINARY)
 
+KUBECONFIG_SECRET := $(PWD)/.secrets/kubeconfig.yaml
+KUBECONFIG := $(if $(wildcard $(KUBECONFIG_SECRET)),$(KUBECONFIG_SECRET),$(KUBECONFIG))
+HELM_CMD ?= helm
+HELM_RELEASE ?= otel-demo
+HELM_NAMESPACE ?= workload
+
 DOCKER_CMD ?= docker
 DOCKER_COMPOSE_CMD ?= docker compose
 DOCKER_COMPOSE_ENV=--env-file .env --env-file .env.override
@@ -148,6 +154,17 @@ endif
 .PHONY: build-and-push
 build-and-push:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) build --push
+
+.PHONY: kyma-registry-login
+kyma-registry-login:
+	@REGISTRY_HOST=$$(KUBECONFIG=$(KUBECONFIG) kubectl get virtualservice dockerregistry -n docker-registry \
+	  -o jsonpath='{.spec.hosts[0]}' 2>/dev/null) && \
+	CREDS=$$(KUBECONFIG=$(KUBECONFIG) kubectl get secret dockerregistry-config-external -n docker-registry \
+	  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d) && \
+	REGISTRY_USER=$$(echo "$$CREDS" | python3 -c "import sys,json; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; print(auths[k]['username'])") && \
+	REGISTRY_PASS=$$(echo "$$CREDS" | python3 -c "import sys,json; d=json.load(sys.stdin); auths=d['auths']; k=list(auths)[0]; print(auths[k]['password'])") && \
+	echo "$$REGISTRY_PASS" | $(DOCKER_CMD) login "$$REGISTRY_HOST" -u "$$REGISTRY_USER" --password-stdin && \
+	echo "Logged in to $$REGISTRY_HOST"
 
 # Create multiplatform builder for buildx
 .PHONY: create-multiplatform-builder
@@ -341,3 +358,25 @@ endif
 .PHONY: build-react-native-android
 build-react-native-android:
 	$(DOCKER_CMD) build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
+
+# Helm targets — deploy the OpenTelemetry Demo to Kubernetes using .secrets/kubeconfig.yaml
+# Override defaults: make helm-deploy HELM_RELEASE=my-release HELM_NAMESPACE=my-ns
+
+.PHONY: helm-repo-add
+helm-repo-add:
+	$(HELM_CMD) repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+	$(HELM_CMD) repo update
+
+HELM_VALUES ?= helm/values.yaml
+
+.PHONY: helm-deploy
+helm-deploy: helm-repo-add
+	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) upgrade --install $(HELM_RELEASE) \
+		open-telemetry/opentelemetry-demo \
+		--namespace $(HELM_NAMESPACE) --create-namespace \
+		-f $(HELM_VALUES)
+
+.PHONY: helm-undeploy
+helm-undeploy:
+	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) uninstall $(HELM_RELEASE) \
+		--namespace $(HELM_NAMESPACE)
