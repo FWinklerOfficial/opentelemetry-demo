@@ -182,12 +182,14 @@ remove-multiplatform-builder:
 .PHONY: build-multiplatform
 build-multiplatform:
 	# Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES) --load --set "*.platform=linux/amd64,linux/arm64"
+	# compose.extras.yaml is a comments-only stub; exclude it since buildx bake rejects empty files.
+	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --load --set "*.platform=linux/amd64,linux/arm64"
 
 .PHONY: build-multiplatform-and-push
 build-multiplatform-and-push:
 	# Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES) --push --set "*.platform=linux/amd64,linux/arm64"
+	# compose.extras.yaml is a comments-only stub; exclude it since buildx bake rejects empty files.
+	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --push --set "*.platform=linux/amd64,linux/arm64"
 
 .PHONY: clean-images
 clean-images:

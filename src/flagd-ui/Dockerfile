@@ -24,6 +24,9 @@ RUN apt-get update \
 # prepare build dir
 WORKDIR /app
 
+# Suppress Erlang TTY NIF init — crashes under QEMU when cross-compiling amd64 on arm64
+ENV ERL_FLAGS="+Bi"
+
 # install hex + rebar
 RUN mix local.hex --force \
   && mix local.rebar --force
