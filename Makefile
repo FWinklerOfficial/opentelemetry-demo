@@ -14,6 +14,9 @@ ADDLICENSE = $(TOOLS_DIR)/$(ADDLICENSE_BINARY)
 
 KUBECONFIG_SECRET := $(PWD)/.secrets/kubeconfig.yaml
 KUBECONFIG := $(if $(wildcard $(KUBECONFIG_SECRET)),$(KUBECONFIG_SECRET),$(KUBECONFIG))
+
+CLS_CREDENTIALS ?= $(PWD)/.secrets/cls-credentials.json
+CLS_SECRET_NAME ?= cloud-logging-tls
 HELM_CMD ?= helm
 HELM_RELEASE ?= otel-demo
 HELM_NAMESPACE ?= workload
@@ -390,3 +393,35 @@ helm-deploy: helm-repo-add
 helm-undeploy:
 	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) uninstall $(HELM_RELEASE) \
 		--namespace $(HELM_NAMESPACE)
+
+# Create the cloud-logging-tls secret in the Kyma cluster from a CLS credentials JSON file.
+# The credentials file must contain ingest-otlp-cert, ingest-otlp-key, and client-ca fields.
+# Override the credentials file path: make helm-create-cls-secret CLS_CREDENTIALS=/path/to/creds.json
+.PHONY: helm-create-cls-secret
+helm-create-cls-secret:
+	@if [ ! -f "$(CLS_CREDENTIALS)" ]; then \
+		echo "ERROR: CLS credentials file not found: $(CLS_CREDENTIALS)"; \
+		echo "       Set CLS_CREDENTIALS=/path/to/cls-credentials.json"; \
+		exit 1; \
+	fi
+	@CERT=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-cert',''))" 2>/dev/null); \
+	KEY=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-key',''))" 2>/dev/null); \
+	CA=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('client-ca',''))" 2>/dev/null); \
+	if [ -z "$$CERT" ] || [ -z "$$KEY" ] || [ -z "$$CA" ]; then \
+		echo "ERROR: credentials file is missing one or more required OTLP ingest fields:"; \
+		echo "       ingest-otlp-cert, ingest-otlp-key, client-ca"; \
+		exit 1; \
+	fi; \
+	TMPDIR=$$(mktemp -d); \
+	trap 'rm -rf "$$TMPDIR"' EXIT; \
+	printf '%s' "$$CERT" > "$$TMPDIR/cloud-logging.crt"; \
+	printf '%s' "$$KEY"  > "$$TMPDIR/cloud-logging.key"; \
+	printf '%s' "$$CA"   > "$$TMPDIR/cloud-logging-ca.crt"; \
+	KUBECONFIG=$(KUBECONFIG) kubectl create secret generic $(CLS_SECRET_NAME) \
+		--namespace $(HELM_NAMESPACE) \
+		--from-file=cloud-logging.crt="$$TMPDIR/cloud-logging.crt" \
+		--from-file=cloud-logging.key="$$TMPDIR/cloud-logging.key" \
+		--from-file=cloud-logging-ca.crt="$$TMPDIR/cloud-logging-ca.crt" \
+		--dry-run=client -o yaml | \
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f -; \
+	echo "Secret $(CLS_SECRET_NAME) applied in namespace $(HELM_NAMESPACE)"
