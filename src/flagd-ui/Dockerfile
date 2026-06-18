@@ -14,7 +14,7 @@
 #   - https://pkgs.org/ - resource for finding needed packages
 #   - Ex: docker.io/hexpm/elixir:1.18.4-erlang-27.3.4-debian-bookworm-20250610-slim
 #
-FROM docker.io/hexpm/elixir:1.19.3-erlang-28.0.2-debian-bullseye-20251117-slim@sha256:78ae416dd0f9100dec7fbc58da76e2cdd0400b6eece5ddb5055390f3162c97cd AS builder
+FROM docker.io/hexpm/elixir:1.19.3-erlang-27.3.4-debian-bullseye-20251117-slim@sha256:ecefde70454aeb0523afa7a41d2fed7901c0272b13cbe6bcc01c8cf1c0d7c54f AS builder
 
 # install build dependencies
 RUN apt-get update \
@@ -23,9 +23,6 @@ RUN apt-get update \
 
 # prepare build dir
 WORKDIR /app
-
-# Suppress Erlang TTY NIF init — crashes under QEMU when cross-compiling amd64 on arm64
-ENV ERL_FLAGS="+Bi"
 
 # install hex + rebar
 RUN mix local.hex --force \
