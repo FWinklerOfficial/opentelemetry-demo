@@ -3,3 +3,7 @@
 
 [worker.oci]
 max-parallelism = 4
+
+# Enable zstd layer compression for pushes (used by kyma-push target).
+[registry."*"]
+  force-compression = true

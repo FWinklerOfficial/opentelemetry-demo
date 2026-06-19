@@ -277,7 +277,7 @@ components:
         value: 16MiB
     resources:
       limits:
-        memory: 20Mi
+        memory: 50Mi
     initContainers:
       - name: wait-for-kafka
         image: busybox:latest
@@ -526,7 +526,7 @@ components:
       - name: LOCUST_AUTOSTART
         value: "false"
       - name: LOCUST_BROWSER_TRAFFIC_ENABLED
-        value: "true"
+        value: "false"
       - name: PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION
         value: python
       - name: FLAGD_HOST

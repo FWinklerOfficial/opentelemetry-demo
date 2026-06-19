@@ -194,6 +194,16 @@ build-multiplatform-and-push:
 	# compose.extras.yaml is a comments-only stub; exclude it since buildx bake rejects empty files.
 	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --push --set "*.platform=linux/amd64,linux/arm64"
 
+# Push amd64-only images to the Kyma registry with zstd compression to minimise upload bandwidth.
+.PHONY: kyma-push
+kyma-push:
+	# Because buildx bake does not support --env-file yet, we need to load it into the environment first.
+	# compose.extras.yaml is a comments-only stub; exclude it since buildx bake rejects empty files.
+	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --push \
+		--set "*.platform=linux/amd64" \
+		--set "*.output.compression=zstd" \
+		--set "*.output.compression-level=3"
+
 .PHONY: clean-images
 clean-images:
 	$(DOCKER_CMD) rmi $(shell $(DOCKER_CMD) images --filter=reference="ghcr.io/open-telemetry/demo:latest-*" -q); \
@@ -395,7 +405,9 @@ helm-undeploy:
 		--namespace $(HELM_NAMESPACE)
 
 # Create the cloud-logging-tls secret in the Kyma cluster from a CLS credentials JSON file.
-# The credentials file must contain ingest-otlp-cert, ingest-otlp-key, and client-ca fields.
+# The credentials file must contain ingest-otlp-cert, ingest-otlp-key, client-ca, and
+# ingest-otlp-endpoint fields. The endpoint is stored in the secret so that
+# kyma-apply-telemetry-pipelines needs no local credentials file.
 # Override the credentials file path: make helm-create-cls-secret CLS_CREDENTIALS=/path/to/creds.json
 .PHONY: helm-create-cls-secret
 helm-create-cls-secret:
@@ -407,21 +419,128 @@ helm-create-cls-secret:
 	@CERT=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-cert',''))" 2>/dev/null); \
 	KEY=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-key',''))" 2>/dev/null); \
 	CA=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('client-ca',''))" 2>/dev/null); \
-	if [ -z "$$CERT" ] || [ -z "$$KEY" ] || [ -z "$$CA" ]; then \
+	ENDPOINT=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-endpoint',''))" 2>/dev/null); \
+	if [ -z "$$CERT" ] || [ -z "$$KEY" ] || [ -z "$$CA" ] || [ -z "$$ENDPOINT" ]; then \
 		echo "ERROR: credentials file is missing one or more required OTLP ingest fields:"; \
-		echo "       ingest-otlp-cert, ingest-otlp-key, client-ca"; \
+		echo "       ingest-otlp-cert, ingest-otlp-key, client-ca, ingest-otlp-endpoint"; \
 		exit 1; \
 	fi; \
 	TMPDIR=$$(mktemp -d); \
 	trap 'rm -rf "$$TMPDIR"' EXIT; \
-	printf '%s' "$$CERT" > "$$TMPDIR/cloud-logging.crt"; \
-	printf '%s' "$$KEY"  > "$$TMPDIR/cloud-logging.key"; \
-	printf '%s' "$$CA"   > "$$TMPDIR/cloud-logging-ca.crt"; \
+	printf '%s' "$$CERT"     > "$$TMPDIR/cloud-logging.crt"; \
+	printf '%s' "$$KEY"      > "$$TMPDIR/cloud-logging.key"; \
+	printf '%s' "$$CA"       > "$$TMPDIR/cloud-logging-ca.crt"; \
+	printf '%s' "$$ENDPOINT" > "$$TMPDIR/ingest-otlp-endpoint"; \
 	KUBECONFIG=$(KUBECONFIG) kubectl create secret generic $(CLS_SECRET_NAME) \
 		--namespace $(HELM_NAMESPACE) \
 		--from-file=cloud-logging.crt="$$TMPDIR/cloud-logging.crt" \
 		--from-file=cloud-logging.key="$$TMPDIR/cloud-logging.key" \
 		--from-file=cloud-logging-ca.crt="$$TMPDIR/cloud-logging-ca.crt" \
+		--from-file=ingest-otlp-endpoint="$$TMPDIR/ingest-otlp-endpoint" \
 		--dry-run=client -o yaml | \
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f -; \
 	echo "Secret $(CLS_SECRET_NAME) applied in namespace $(HELM_NAMESPACE)"
+
+define KYMA_TELEMETRY_PIPELINES
+apiVersion: telemetry.kyma-project.io/v1alpha1
+kind: TracePipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: $(CLS_SECRET_NAME)
+            namespace: $(HELM_NAMESPACE)
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1alpha1
+kind: MetricPipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  input:
+    runtime:
+      enabled: true
+    prometheus:
+      enabled: true
+    istio:
+      enabled: true
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: $(CLS_SECRET_NAME)
+            namespace: $(HELM_NAMESPACE)
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1alpha1
+kind: LogPipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  input:
+    application:
+      namespaces:
+        system: true
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: $(CLS_SECRET_NAME)
+            namespace: $(HELM_NAMESPACE)
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: $(CLS_SECRET_NAME)
+              namespace: $(HELM_NAMESPACE)
+              key: cloud-logging.key
+endef
+
+# Apply Kyma Telemetry Module pipelines (TracePipeline, MetricPipeline, LogPipeline) that forward
+# all signals from the Kyma-managed collector to CLS using the cloud-logging-tls secret already in
+# the cluster. Prerequisites: helm-create-cls-secret must have been run first.
+.PHONY: kyma-apply-telemetry-pipelines
+kyma-apply-telemetry-pipelines:
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f helm/kyma-telemetry-pipelines.yaml
