@@ -441,34 +441,6 @@ helm-create-cls-secret:
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f -; \
 	echo "Secret $(CLS_SECRET_NAME) applied in namespace $(HELM_NAMESPACE)"
 
-define KYMA_TELEMETRY_PIPELINES
-apiVersion: telemetry.kyma-project.io/v1alpha1
-kind: TracePipeline
-metadata:
-  name: to-cloud-logging
-spec:
-  output:
-    otlp:
-      endpoint:
-        valueFrom:
-          secretKeyRef:
-            name: $(CLS_SECRET_NAME)
-            namespace: $(HELM_NAMESPACE)
-            key: ingest-otlp-endpoint
-      tls:
-        insecureSkipVerify: true
-        cert:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.crt
-        key:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.key
 ---
 apiVersion: telemetry.kyma-project.io/v1alpha1
 kind: MetricPipeline
