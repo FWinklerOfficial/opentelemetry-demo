@@ -19,7 +19,14 @@
 * Access to Kyma/K8s Cluster, 
   * Option A: via your regular KUBECONFIG environment variable
   * Option B: provide the kubeconfig in ```.secrets/kubeconfig.yaml```, e.g. from a [BTP Subaccount](https://canary.cockpit.btp.int.sap/cockpit/#/globalaccount/0dca1261-be1d-4d63-8462-22f06468275c/subaccount/80e7f382-e9ea-4f62-9692-d306dce9be32/service-instances&//detail/934A30DB-5135-47C3-88B7-C2E856DF2290/?layout=TwoColumnsMidExpanded)
-
+* Provide CLS credentials in ```.secrets/cls-credentials.json``` 
+### Enable Kyma telemetry pipeline
+```
+# setup cls secret from credentials file
+make helm-create-cls-secret
+# setup kyma telemetry module
+make kyma-apply-telemetry-pipelines
+```
 ### Deployment
 ```
 # build & push to kyma registry all components
@@ -29,6 +36,8 @@ make kyma-push
 # Deploy helm chart, e.g. apply changes in values
 make helm-deploy
 ```
+
+
 # Push a single service
 
 
