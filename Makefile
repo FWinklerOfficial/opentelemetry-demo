@@ -195,6 +195,8 @@ build-multiplatform-and-push:
 	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --push --set "*.platform=linux/amd64,linux/arm64"
 
 # Push amd64-only images to the Kyma registry with zstd compression to minimise upload bandwidth.
+# Use to push all services, or a single service component
+# Example: make kyma-push service=frontend
 .PHONY: kyma-push
 kyma-push:
 	# Because buildx bake does not support --env-file yet, we need to load it into the environment first.
@@ -202,7 +204,8 @@ kyma-push:
 	set -a; . ./.env.override; set +a && docker buildx bake $(DOCKER_COMPOSE_FILES_FULL) $(DOCKER_COMPOSE_FILES_OBSERVABILITY) --push \
 		--set "*.platform=linux/amd64" \
 		--set "*.output.compression=zstd" \
-		--set "*.output.compression-level=3"
+		--set "*.output.compression-level=3" \
+		$(service)
 
 .PHONY: clean-images
 clean-images:

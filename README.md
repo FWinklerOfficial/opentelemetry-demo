@@ -13,6 +13,25 @@
 [![OpenSSF Scorecard for opentelemetry-demo](https://api.scorecard.dev/projects/github.com/open-telemetry/opentelemetry-demo/badge)](https://scorecard.dev/viewer/?uri=github.com/open-telemetry/opentelemetry-demo)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9247/badge)](https://www.bestpractices.dev/en/projects/9247)
 
+## Setup Guide 
+### Prerequesites
+* checkout this repo ```git clone https://github.com/FWinklerOfficial/opentelemetry-demo.git```
+* Access to Kyma/K8s Cluster, 
+  * Option A: via your regular KUBECONFIG environment variable
+  * Option B: provide the kubeconfig in ```.secrets/kubeconfig.yaml```, e.g. from a [BTP Subaccount](https://canary.cockpit.btp.int.sap/cockpit/#/globalaccount/0dca1261-be1d-4d63-8462-22f06468275c/subaccount/80e7f382-e9ea-4f62-9692-d306dce9be32/service-instances&//detail/934A30DB-5135-47C3-88B7-C2E856DF2290/?layout=TwoColumnsMidExpanded)
+
+### Deployment
+```
+# build & push to kyma registry all components
+make kyma-push
+# build & push to kyma registry a single service
+# make kyma-push service=frontend
+# Deploy helm chart, e.g. apply changes in values
+make helm-deploy
+```
+# Push a single service
+
+
 ## Welcome to the OpenTelemetry Astronomy Shop Demo
 
 This repository contains the OpenTelemetry Astronomy Shop, a microservice-based
