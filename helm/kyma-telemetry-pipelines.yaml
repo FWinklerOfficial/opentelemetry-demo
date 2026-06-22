@@ -1,0 +1,96 @@
+# Kyma Telemetry Module pipelines forwarding all signals to SAP Cloud Logging (CLS).
+# Applied by: make kyma-apply-telemetry-pipelines
+# Prerequisites: make helm-create-cls-secret must have been run to create the cloud-logging-tls secret.
+apiVersion: telemetry.kyma-project.io/v1beta1
+kind: TracePipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: cloud-logging-tls
+            namespace: workload
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1beta1
+kind: MetricPipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  input:
+    runtime:
+      enabled: true
+    prometheus:
+      enabled: false
+    istio:
+      enabled: false
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: cloud-logging-tls
+            namespace: workload
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1beta1
+kind: LogPipeline
+metadata:
+  name: to-cloud-logging
+spec:
+  input:
+    runtime:
+      namespaces: {workload}
+  output:
+    otlp:
+      endpoint:
+        valueFrom:
+          secretKeyRef:
+            name: cloud-logging-tls
+            namespace: workload
+            key: ingest-otlp-endpoint
+      tls:
+        insecureSkipVerify: true
+        cert:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.crt
+        key:
+          valueFrom:
+            secretKeyRef:
+              name: cloud-logging-tls
+              namespace: workload
+              key: cloud-logging.key

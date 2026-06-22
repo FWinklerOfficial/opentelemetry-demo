@@ -420,9 +420,11 @@ helm-create-cls-secret:
 	KEY=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-key',''))" 2>/dev/null); \
 	CA=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('client-ca',''))" 2>/dev/null); \
 	ENDPOINT=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-otlp-endpoint',''))" 2>/dev/null); \
-	if [ -z "$$CERT" ] || [ -z "$$KEY" ] || [ -z "$$CA" ] || [ -z "$$ENDPOINT" ]; then \
+	USER=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-username',''))" 2>/dev/null); \
+	PASS=$$(python3 -c "import json,sys; d=json.load(open('$(CLS_CREDENTIALS)')); print(d.get('ingest-password',''))" 2>/dev/null); \
+	if [ -z "$$CERT" ] || [ -z "$$KEY" ] || [ -z "$$CA" ] || [ -z "$$ENDPOINT" ] || [ -z "$$USER" ] || [ -z "$$PASS" ]; then \
 		echo "ERROR: credentials file is missing one or more required OTLP ingest fields:"; \
-		echo "       ingest-otlp-cert, ingest-otlp-key, client-ca, ingest-otlp-endpoint"; \
+		echo "       ingest-otlp-cert, ingest-otlp-key, client-ca, ingest-otlp-endpoint, ingest-username, ingest-password"; \
 		exit 1; \
 	fi; \
 	TMPDIR=$$(mktemp -d); \
@@ -431,84 +433,19 @@ helm-create-cls-secret:
 	printf '%s' "$$KEY"      > "$$TMPDIR/cloud-logging.key"; \
 	printf '%s' "$$CA"       > "$$TMPDIR/cloud-logging-ca.crt"; \
 	printf '%s' "$$ENDPOINT" > "$$TMPDIR/ingest-otlp-endpoint"; \
+	printf '%s' "$$USER"     > "$$TMPDIR/ingest-username"; \
+	printf '%s' "$$PASS"     > "$$TMPDIR/ingest-password"; \
 	KUBECONFIG=$(KUBECONFIG) kubectl create secret generic $(CLS_SECRET_NAME) \
 		--namespace $(HELM_NAMESPACE) \
 		--from-file=cloud-logging.crt="$$TMPDIR/cloud-logging.crt" \
 		--from-file=cloud-logging.key="$$TMPDIR/cloud-logging.key" \
 		--from-file=cloud-logging-ca.crt="$$TMPDIR/cloud-logging-ca.crt" \
 		--from-file=ingest-otlp-endpoint="$$TMPDIR/ingest-otlp-endpoint" \
+		--from-file=ingest-username="$$TMPDIR/ingest-username" \
+		--from-file=ingest-password="$$TMPDIR/ingest-password" \
 		--dry-run=client -o yaml | \
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f -; \
 	echo "Secret $(CLS_SECRET_NAME) applied in namespace $(HELM_NAMESPACE)"
-
----
-apiVersion: telemetry.kyma-project.io/v1alpha1
-kind: MetricPipeline
-metadata:
-  name: to-cloud-logging
-spec:
-  input:
-    runtime:
-      enabled: true
-    prometheus:
-      enabled: true
-    istio:
-      enabled: true
-  output:
-    otlp:
-      endpoint:
-        valueFrom:
-          secretKeyRef:
-            name: $(CLS_SECRET_NAME)
-            namespace: $(HELM_NAMESPACE)
-            key: ingest-otlp-endpoint
-      tls:
-        insecureSkipVerify: true
-        cert:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.crt
-        key:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.key
----
-apiVersion: telemetry.kyma-project.io/v1alpha1
-kind: LogPipeline
-metadata:
-  name: to-cloud-logging
-spec:
-  input:
-    application:
-      namespaces:
-        system: true
-  output:
-    otlp:
-      endpoint:
-        valueFrom:
-          secretKeyRef:
-            name: $(CLS_SECRET_NAME)
-            namespace: $(HELM_NAMESPACE)
-            key: ingest-otlp-endpoint
-      tls:
-        insecureSkipVerify: true
-        cert:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.crt
-        key:
-          valueFrom:
-            secretKeyRef:
-              name: $(CLS_SECRET_NAME)
-              namespace: $(HELM_NAMESPACE)
-              key: cloud-logging.key
-endef
 
 # Apply Kyma Telemetry Module pipelines (TracePipeline, MetricPipeline, LogPipeline) that forward
 # all signals from the Kyma-managed collector to CLS using the cloud-logging-tls secret already in
