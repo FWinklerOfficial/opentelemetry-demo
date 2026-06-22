@@ -19,7 +19,7 @@
 * Access to Kyma/K8s Cluster, 
   * Option A: via your regular KUBECONFIG environment variable
   * Option B: provide the kubeconfig in ```.secrets/kubeconfig.yaml```, e.g. from a [BTP Subaccount](https://canary.cockpit.btp.int.sap/cockpit/#/globalaccount/0dca1261-be1d-4d63-8462-22f06468275c/subaccount/80e7f382-e9ea-4f62-9692-d306dce9be32/service-instances&//detail/934A30DB-5135-47C3-88B7-C2E856DF2290/?layout=TwoColumnsMidExpanded)
-* Provide CLS credentials in ```.secrets/cls-credentials.json``` 
+* Provide CLS credentials in ```.secrets/cls-credentials.json``` see  [otlp-ingest service binding](https://canary.cockpit.btp.int.sap/cockpit/#/globalaccount/0dca1261-be1d-4d63-8462-22f06468275c/subaccount/80e7f382-e9ea-4f62-9692-d306dce9be32/service-instances&//detail/785c972d-4693-445c-a3f4-22738b9e293a/?layout=TwoColumnsMidExpanded)
 ### Enable Kyma telemetry pipeline
 ```
 # setup cls secret from credentials file

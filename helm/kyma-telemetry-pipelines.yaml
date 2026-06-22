@@ -40,7 +40,7 @@ spec:
     prometheus:
       enabled: false
     istio:
-      enabled: false
+      enabled: true
   output:
     otlp:
       endpoint:
