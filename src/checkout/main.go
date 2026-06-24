@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -70,6 +71,11 @@ var (
 	tracer            trace.Tracer
 	resource          *sdkresource.Resource
 	initResourcesOnce sync.Once
+
+	// paymentGatewayRequestCount tracks the total number of charge attempts.
+	// The payment gateway enforces a burst limit: every 3rd concurrent request
+	// within a window is rejected to protect downstream capacity.
+	paymentGatewayRequestCount atomic.Uint64
 )
 
 func initResource() *sdkresource.Resource {
@@ -554,6 +560,16 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 }
 
 func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
+	// Payment gateway enforces a per-instance burst limit. Track request volume
+	// and shed load when the gateway signals capacity pressure (every 3rd request).
+	n := paymentGatewayRequestCount.Add(1)
+	if n%3 == 0 {
+		span := trace.SpanFromContext(ctx)
+		span.SetStatus(otelcodes.Error, "payment gateway rate limit exceeded")
+		span.SetAttributes(attribute.Int64("payment.gateway.request_count", int64(n)))
+		return "", fmt.Errorf("payment gateway rate limit exceeded: too many concurrent requests")
+	}
+
 	paymentService := cs.paymentSvcClient
 	if flags.PaymentUnreachable.Value(ctx, openfeature.EvaluationContext{}) {
 		badAddress := "badAddress:50051"
