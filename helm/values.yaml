@@ -994,6 +994,10 @@ opentelemetry-collector:
         tls:
           cert_file: "/etc/cloud-logging/tls/cloud-logging.crt"
           key_file: "/etc/cloud-logging/tls/cloud-logging.key"
+      otlp/tempo:
+        endpoint: tempo:4317
+        tls:
+          insecure: true
 
     processors:
       memory_limiter:
@@ -1037,7 +1041,7 @@ opentelemetry-collector:
       pipelines:
         traces:
           processors: [memory_limiter, resourcedetection, resource, transform, batch]
-          exporters: [otlp/jaeger, debug, spanmetrics, otlp/cloud-logging]
+          exporters: [otlp/jaeger, debug, spanmetrics, otlp/cloud-logging, otlp/tempo]
         metrics:
           receivers: [otlp, kafkametrics, spanmetrics]
           processors: [memory_limiter, resourcedetection, resource, batch]

@@ -21,3 +21,6 @@ datasources:
         - url: http://localhost:8080/jaeger/ui/trace/$${__value.raw}
           name: trace_id
           urlDisplayLabel: View in Jaeger UI
+
+        - datasourceUid: webstore-tempo
+          name: trace_id

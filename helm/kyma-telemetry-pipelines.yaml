@@ -1,4 +1,5 @@
-# Kyma Telemetry Module pipelines forwarding all signals to SAP Cloud Logging (CLS).
+# Kyma Telemetry Module pipelines forwarding all signals to SAP Cloud Logging (CLS)
+# and traces/metrics also to the local Tempo and Prometheus instances.
 # Applied by: make kyma-apply-telemetry-pipelines
 # Prerequisites: make helm-create-cls-secret must have been run to create the cloud-logging-tls secret.
 apiVersion: telemetry.kyma-project.io/v1beta1
@@ -28,6 +29,18 @@ spec:
               name: cloud-logging-tls
               namespace: workload
               key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1beta1
+kind: TracePipeline
+metadata:
+  name: to-tempo
+spec:
+  output:
+    otlp:
+      endpoint:
+        value: tempo.workload.svc.cluster.local:4317
+      tls:
+        insecure: true
 ---
 apiVersion: telemetry.kyma-project.io/v1beta1
 kind: MetricPipeline
@@ -63,6 +76,26 @@ spec:
               name: cloud-logging-tls
               namespace: workload
               key: cloud-logging.key
+---
+apiVersion: telemetry.kyma-project.io/v1beta1
+kind: MetricPipeline
+metadata:
+  name: to-prometheus
+spec:
+  input:
+    runtime:
+      enabled: true
+    prometheus:
+      enabled: false
+    istio:
+      enabled: true
+  output:
+    otlp:
+      protocol: http
+      endpoint:
+        value: http://prometheus.workload.svc.cluster.local:9090/api/v1/otlp
+      tls:
+        insecure: true
 ---
 apiVersion: telemetry.kyma-project.io/v1beta1
 kind: LogPipeline

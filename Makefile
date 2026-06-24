@@ -382,10 +382,14 @@ build-react-native-android:
 
 .PHONY: helm-repo-add
 helm-repo-add:
-	$(HELM_CMD) repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+	$(HELM_CMD) repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts --force-update
+	$(HELM_CMD) repo add grafana https://grafana.github.io/helm-charts --force-update
 	$(HELM_CMD) repo update
 
 HELM_VALUES ?= helm/values.yaml
+TEMPO_RELEASE ?= tempo
+TEMPO_NAMESPACE ?= workload
+TEMPO_VALUES ?= helm/tempo-values.yaml
 
 # Read IMAGE_NAME / DEMO_VERSION from .env.override if present, else .env
 HELM_IMAGE_REPO ?= $(shell grep -s '^IMAGE_NAME=' .env.override .env | head -1 | cut -d= -f2-)
@@ -393,7 +397,7 @@ HELM_IMAGE_TAG  ?= $(shell grep -s '^DEMO_VERSION=' .env.override .env | head -1
 HELM_PULL_SECRET ?= dockerregistry-config-external
 
 .PHONY: helm-deploy
-helm-deploy: helm-repo-add
+helm-deploy: helm-repo-add helm-deploy-tempo
 	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) upgrade --install $(HELM_RELEASE) \
 		open-telemetry/opentelemetry-demo \
 		--namespace $(HELM_NAMESPACE) --create-namespace \
@@ -406,6 +410,20 @@ helm-deploy: helm-repo-add
 helm-undeploy:
 	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) uninstall $(HELM_RELEASE) \
 		--namespace $(HELM_NAMESPACE)
+
+# Deploy Grafana Tempo (community edition, single-binary) to Kubernetes.
+# Override defaults: make helm-deploy-tempo TEMPO_RELEASE=my-tempo TEMPO_NAMESPACE=my-ns TEMPO_VALUES=path/to/values.yaml
+.PHONY: helm-deploy-tempo
+helm-deploy-tempo: helm-repo-add
+	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) upgrade --install $(TEMPO_RELEASE) \
+		grafana/tempo \
+		--namespace $(TEMPO_NAMESPACE) --create-namespace \
+		$(if $(wildcard $(TEMPO_VALUES)),-f $(TEMPO_VALUES))
+
+.PHONY: helm-undeploy-tempo
+helm-undeploy-tempo:
+	KUBECONFIG=$(KUBECONFIG) $(HELM_CMD) uninstall $(TEMPO_RELEASE) \
+		--namespace $(TEMPO_NAMESPACE)
 
 # Create the cloud-logging-tls secret in the Kyma cluster from a CLS credentials JSON file.
 # The credentials file must contain ingest-otlp-cert, ingest-otlp-key, client-ca, and
