@@ -18,7 +18,7 @@ RUN composer install \
     --no-dev \
     --prefer-dist
 
-FROM docker.io/library/php:8.5.7-cli-alpine3.23@sha256:3cfccf28acfbb58ae991324612a3b0e2062a572026bb4dca030020e5295d1633
+FROM docker.io/library/php:8.5.12-cli-alpine3.23@sha256:307c3a4ece9b0dc24d4e5c1ad6229aab15354144b12f3afed209ed847c855697
 
 COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
 
