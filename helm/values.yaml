@@ -1211,6 +1211,8 @@ prometheus:
     service:
       servicePort: 9090
     resources:
+      requests:
+        memory: 512Mi
       limits:
         memory: 1Gi
 
