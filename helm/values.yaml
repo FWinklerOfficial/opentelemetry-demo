@@ -1243,9 +1243,13 @@ grafana:
       limits:
         cpu: 150m
         memory: 256Mi
+  # Grafana 13 needs ~300Mi at steady state; 300Mi caused repeated OOMKills.
+  # Keep GOMEMLIMIT ~90% of the limit so the Go GC reacts before the kernel OOM-kills.
+  env:
+    GOMEMLIMIT: "460MiB"
   resources:
     limits:
-      memory: 300Mi
+      memory: 512Mi
 
 opensearch:
   enabled: true
